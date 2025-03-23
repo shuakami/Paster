@@ -1,4 +1,7 @@
 use std::ffi::c_void;
+use std::sync::Mutex;
+use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use tokio::time::{sleep, Duration};
 use windows::Win32::{
     Foundation::HGLOBAL,
@@ -15,6 +18,97 @@ use windows::Win32::{
     Foundation::HWND,
     System::DataExchange::{GetClipboardData, OpenClipboard},
 };
+
+// 用于控制程序是否暂停
+pub struct PasteState {
+    pub is_paused: bool,
+    pub shortcut: HotkeyConfig,
+}
+
+impl PasteState {
+    pub fn new() -> Self {
+        Self { 
+            is_paused: false,
+            shortcut: HotkeyConfig::default(),
+        }
+    }
+}
+
+// 快捷键配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HotkeyConfig {
+    pub alt: bool,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub left_ctrl: bool,
+    pub right_ctrl: bool,
+    pub key: String,
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        Self {
+            alt: true,
+            ctrl: true,
+            shift: false,
+            left_ctrl: false,
+            right_ctrl: false,
+            key: "V".to_string(),
+        }
+    }
+}
+
+impl HotkeyConfig {
+    // 转换为Tauri快捷键格式
+    pub fn to_tauri_accelerator(&self) -> String {
+        let mut parts = Vec::new();
+        
+        if self.alt {
+            parts.push("Alt".to_string());
+        }
+        
+        if self.ctrl {
+            parts.push("Ctrl".to_string());
+        } else if self.left_ctrl {
+            parts.push("CtrL".to_string());
+        } else if self.right_ctrl {
+            parts.push("CtrR".to_string());
+        }
+        
+        if self.shift {
+            parts.push("Shift".to_string());
+        }
+        
+        parts.push(self.key.clone());
+        
+        parts.join("+")
+    }
+    
+    // 获取快捷键描述
+    pub fn get_description(&self) -> String {
+        let mut parts = Vec::new();
+        
+        if self.alt {
+            parts.push("Alt".to_string());
+        }
+        
+        if self.ctrl {
+            parts.push("Ctrl".to_string());
+        } else if self.left_ctrl {
+            parts.push("左Ctrl".to_string());
+        } else if self.right_ctrl {
+            parts.push("右Ctrl".to_string());
+        }
+        
+        if self.shift {
+            parts.push("Shift".to_string());
+        }
+        
+        parts.push(self.key.clone());
+        
+        parts.join("+")
+    }
+}
 
 fn get_clipboard() -> Result<Vec<u16>, &'static str> {
     const CF_UNICODETEXT: u32 = 13;
@@ -59,7 +153,18 @@ fn get_clipboard() -> Result<Vec<u16>, &'static str> {
 }
 
 #[tauri::command]
-pub async fn paste(stand: u32, float: u32) -> Result<(), &'static str> {
+pub async fn paste(stand: u32, float: u32, app_handle: tauri::AppHandle) -> Result<(), &'static str> {
+    // 检查是否暂停状态，在await之前检查完成并释放锁
+    let is_paused = {
+        let state = app_handle.state::<Mutex<PasteState>>();
+        let state = state.lock().unwrap();
+        state.is_paused
+    };
+    
+    if is_paused {
+        return Err("功能已暂停");
+    }
+    
     let utf16_units: Vec<u16> = get_clipboard()?;
     for item in utf16_units {
         if item == 10 {
@@ -117,4 +222,36 @@ pub async fn paste(stand: u32, float: u32) -> Result<(), &'static str> {
     }
 
     return Ok(());
+}
+
+#[tauri::command]
+pub fn toggle_pause(app_handle: tauri::AppHandle) -> bool {
+    let state = app_handle.state::<Mutex<PasteState>>();
+    let mut state = state.lock().unwrap();
+    state.is_paused = !state.is_paused;
+    state.is_paused
+}
+
+#[tauri::command]
+pub fn get_shortcut(app_handle: tauri::AppHandle) -> HotkeyConfig {
+    let state = app_handle.state::<Mutex<PasteState>>();
+    let state = state.lock().unwrap();
+    state.shortcut.clone()
+}
+
+#[tauri::command]
+pub fn update_shortcut(config: HotkeyConfig, app_handle: tauri::AppHandle) -> Result<String, String> {
+    let state = app_handle.state::<Mutex<PasteState>>();
+    let mut state = state.lock().unwrap();
+    
+    // 保存新配置
+    state.shortcut = config.clone();
+    
+    // 生成描述
+    let description = config.get_description();
+    
+    // 通知主线程更新快捷键
+    app_handle.emit_all("update-hotkey", config).map_err(|e| e.to_string())?;
+    
+    Ok(description)
 }

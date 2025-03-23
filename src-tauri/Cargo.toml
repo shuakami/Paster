@@ -17,14 +17,19 @@ tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
 rand = "0.8.5"
-tauri = { version = "1.5", features = ["shell-open"] }
+tauri = { version = "1.5", features = [ "global-shortcut-all", "shell-open", "system-tray", "global-shortcut"] }
 tokio = { version = "1", features = ["full"] }
 windows = { version = "0.52.0", features = [
     "Win32_Foundation",
     "Win32_System_Memory",
     "Win32_System_DataExchange",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging", 
+    "Win32_System_Threading"
 ] }
+auto-launch = "0.5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 [features]
 # by default Tauri runs in production mode
