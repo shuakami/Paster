@@ -44,13 +44,16 @@ pub fn register_global_shortcut(
 
     let app_handle_clone = app_handle.clone();
     let paste_handler = move || {
+        #[cfg(debug_assertions)]
         println!("全局快捷键被触发");
+        
         let state = app_handle_clone.state::<Mutex<PasteState>>();
         let locked = state.lock().unwrap();
         if !locked.is_paused {
             let window = app_handle_clone.get_window("main").unwrap();
             let _ = window.emit("trigger-paste", ());
         } else {
+            #[cfg(debug_assertions)]
             println!("应用已暂停，忽略快捷键");
         }
     };
@@ -61,11 +64,15 @@ pub fn register_global_shortcut(
     {
         Ok(_) => {
             locked_state.registered_shortcut = Some(accelerator.clone());
+            #[cfg(debug_assertions)]
             println!("全局快捷键 \"{}\" 已注册成功", accelerator);
+            
             Ok(())
         }
         Err(e) => {
+            #[cfg(debug_assertions)]
             println!("全局快捷键 \"{}\" 注册失败: {}", accelerator, e);
+            
             Err(e.to_string())
         }
     }
@@ -87,7 +94,9 @@ fn load_shortcut_config(app_handle: &tauri::AppHandle) -> HotkeyConfig {
     ) {
         Ok(path) => path,
         Err(e) => {
+            #[cfg(debug_assertions)]
             eprintln!("获取app_config_dir失败: {}", e);
+            
             return default;
         }
     };
@@ -100,7 +109,9 @@ fn load_shortcut_config(app_handle: &tauri::AppHandle) -> HotkeyConfig {
     let content = match fs::read_to_string(&store_path) {
         Ok(s) => s,
         Err(e) => {
+            #[cfg(debug_assertions)]
             eprintln!("读取配置文件失败: {}", e);
+            
             return default;
         }
     };
@@ -108,12 +119,16 @@ fn load_shortcut_config(app_handle: &tauri::AppHandle) -> HotkeyConfig {
     let config = match serde_json::from_str::<HotkeyConfig>(&content) {
         Ok(cfg) => cfg,
         Err(e) => {
+            #[cfg(debug_assertions)]
             eprintln!("解析JSON失败: {}", e);
+            
             return default;
         }
     };
 
+    #[cfg(debug_assertions)]
     println!("已从 {} 读取快捷键配置: {:?}", store_path.display(), config);
+    
     config
 }
 
@@ -122,6 +137,7 @@ async fn main() {
     let auto_start = AutoLaunchBuilder::new()
         .set_app_name("Paster")
         .set_app_path(std::env::current_exe().unwrap().to_str().unwrap())
+        .set_args("--silent")
         .build()
         .unwrap();
 
@@ -211,6 +227,18 @@ async fn main() {
             // 4. 设置开机自启
             if !auto_start.is_enabled().unwrap() {
                 let _ = auto_start.enable();
+            }
+            
+            // 5. 处理静默启动参数
+            let matches = app.get_cli_matches().unwrap();
+            let is_silent = matches.args.get("silent").and_then(|arg| arg.value.as_bool()).unwrap_or(false);
+            
+            // 如果启动参数包含 --silent，则隐藏窗口
+            if is_silent {
+                #[cfg(debug_assertions)]
+                println!("以静默模式启动");
+                
+                let _ = window.hide();
             }
 
             Ok(())

@@ -78,8 +78,21 @@
         "minimizable": true,
         "alwaysOnTop": true,
         "title": "Paster By: Wed0n",
-        "visible": false
+        "visible": false,
+        "hiddenTitle": true,
+        "skipTaskbar": false
       }
-    ]
+    ],
+    "cli": {
+      "description": "Paster 应用",
+      "args": [
+        {
+          "name": "silent",
+          "short": "s",
+          "description": "启动应用时不显示窗口",
+          "takesValue": false
+        }
+      ]
+    }
   }
 }
