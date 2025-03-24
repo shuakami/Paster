@@ -68,10 +68,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "width": 300,
-        "height": 200,
-        "minWidth": 300,
-        "minHeight": 200,
+        "width": 500,
+        "height": 400,
+        "minWidth": 400,
+        "minHeight": 350,
         "center": true,
         "resizable": true,
         "maximizable": true,
